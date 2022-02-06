@@ -35,18 +35,11 @@ OBJS = \
   $K/sysfile.o \
   $K/kernelvec.o \
   $K/plic.o \
-  $K/virtio_disk.o
+  $K/virtio_disk.o \
+  $K/vmcopyin.o\
+  $K/stats.o\
+  $K/sprintf.o
 
-ifeq ($(LAB),pgtbl)
-OBJS += \
-	$K/vmcopyin.o
-endif
-
-ifeq ($(LAB),$(filter $(LAB), pgtbl lock))
-OBJS += \
-	$K/stats.o\
-	$K/sprintf.o
-endif
 
 
 ifeq ($(LAB),net)
