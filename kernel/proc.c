@@ -110,6 +110,10 @@ found:
     release(&p->lock);
     return 0;
   }
+  //map kernel pagetable to process's pagetable
+  proc_kvminit(p);
+  //init kernel stack
+  proc_kstackinit(p);
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -131,6 +135,9 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->kernel_pagetable){
+    proc_freekpagetable(p->kernel_pagetable);
+  }
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -463,8 +470,9 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        proc_kvminithart(p);
         swtch(&c->context, &p->context);
-
+        kvminithart();
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
