@@ -61,7 +61,7 @@ exec(char *path, char **argv)
   end_op();
   ip = 0;
 
-  p = myproc();
+//  p = myproc();
   uint64 oldsz = p->sz;
 
   // Allocate two pages at the next page boundary.
