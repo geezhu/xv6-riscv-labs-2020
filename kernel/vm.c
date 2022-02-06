@@ -522,7 +522,7 @@ void vmprint_impl(pagetable_t pagetable,int level){
         if((pte & PTE_V)){
             // this PTE points to a lower-level page table.
             uint64 child = PTE2PA(pte);
-            for(int j=3;j>=level;j--){
+            for(int j=2;j>=level;j--){
                 printf("..");
                 if(j == level){
                     printf("%d: ",i);
