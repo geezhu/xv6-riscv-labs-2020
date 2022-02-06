@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -14,37 +16,93 @@ pagetable_t kernel_pagetable;
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
+/*
+ * create a direct-map page table of process for the kernel.
+ */
+void
+proc_kvmmap(struct proc* proc,uint64 va, uint64 pa, uint64 sz, int perm)
+{
+    if(proc==nullptr){
+        if(mappages(kernel_pagetable, va, sz, pa, perm) != 0)
+            panic("kvmmap");
+    } else{
+        if(mappages(proc->kernel_pagetable, va, sz, pa, perm) != 0)
+            panic("kvmmap");
+    }
 
+}
+void
+proc_kvminit(struct proc* proc)
+{
+    if(proc==nullptr){
+        kernel_pagetable = (pagetable_t) kalloc();
+        memset(kernel_pagetable, 0, PGSIZE);
+    } else{
+        proc->kernel_pagetable=(pagetable_t) kalloc();
+        memset(proc->kernel_pagetable, 0, PGSIZE);
+    }
+
+    // uart registers
+    proc_kvmmap(proc,UART0, UART0, PGSIZE, PTE_R | PTE_W);
+
+    // virtio mmio disk interface
+    proc_kvmmap(proc,VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+
+    // CLINT
+    if(proc==nullptr){
+        proc_kvmmap(proc,CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+    }
+
+    // PLIC
+    proc_kvmmap(proc,PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+
+    // map kernel text executable and read-only.
+    proc_kvmmap(proc,KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+
+    // map kernel data and the physical RAM we'll make use of.
+    proc_kvmmap(proc,(uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+
+    // map the trampoline for trap entry/exit to
+    // the highest virtual address in the kernel.
+    proc_kvmmap(proc,TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+}
+// Allocate a page for the process's kernel stack.
+// Map it high in memory, followed by an invalid
+// guard page.
+void
+proc_kstackinit(struct proc* p)
+{
+    if(p==nullptr){
+        panic("proc_kstackinit");
+    }
+    char *pa = kalloc();
+    if(pa == 0)
+        panic("kalloc");
+    uint64 va = KSTACK(0);
+    proc_kvmmap(p,va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+    p->kstack = va;
+}
+// Switch h/w page table register to the kernel's page table,
+// and enable paging.
+void
+proc_kvminithart(struct proc* p)
+{
+    if(p!=nullptr){
+        w_satp(MAKE_SATP(p->kernel_pagetable));
+        sfence_vma();
+    } else{
+        w_satp(MAKE_SATP(kernel_pagetable));
+        sfence_vma();
+    }
+
+}
 /*
  * create a direct-map page table for the kernel.
  */
 void
 kvminit()
 {
-  kernel_pagetable = (pagetable_t) kalloc();
-  memset(kernel_pagetable, 0, PGSIZE);
-
-  // uart registers
-  kvmmap(UART0, UART0, PGSIZE, PTE_R | PTE_W);
-
-  // virtio mmio disk interface
-  kvmmap(VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
-
-  // CLINT
-  kvmmap(CLINT, CLINT, 0x10000, PTE_R | PTE_W);
-
-  // PLIC
-  kvmmap(PLIC, PLIC, 0x400000, PTE_R | PTE_W);
-
-  // map kernel text executable and read-only.
-  kvmmap(KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
-
-  // map kernel data and the physical RAM we'll make use of.
-  kvmmap((uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
-
-  // map the trampoline for trap entry/exit to
-  // the highest virtual address in the kernel.
-  kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  proc_kvminit(nullptr);
 }
 
 // Switch h/w page table register to the kernel's page table,
@@ -52,8 +110,7 @@ kvminit()
 void
 kvminithart()
 {
-  w_satp(MAKE_SATP(kernel_pagetable));
-  sfence_vma();
+  proc_kvminithart(nullptr);
 }
 
 // Return the address of the PTE in page table pagetable
@@ -120,7 +177,24 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
   if(mappages(kernel_pagetable, va, sz, pa, perm) != 0)
     panic("kvmmap");
 }
-
+uint64
+proc_kvmpa(struct proc*p,uint64 va)
+{
+    uint64 off = va % PGSIZE;
+    pte_t *pte;
+    uint64 pa;
+    if(p){
+        pte = walk(p->kernel_pagetable, va, 0);
+    } else{
+        pte = walk(kernel_pagetable,va,0);
+    }
+    if(pte == 0)
+        panic("proc_kvmpa");
+    if((*pte & PTE_V) == 0)
+        panic("proc_kvmpa");
+    pa = PTE2PA(*pte);
+    return pa+off;
+}
 // translate a kernel virtual address to
 // a physical address. only needed for
 // addresses on the stack.
@@ -128,17 +202,7 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
 uint64
 kvmpa(uint64 va)
 {
-  uint64 off = va % PGSIZE;
-  pte_t *pte;
-  uint64 pa;
-  
-  pte = walk(kernel_pagetable, va, 0);
-  if(pte == 0)
-    panic("kvmpa");
-  if((*pte & PTE_V) == 0)
-    panic("kvmpa");
-  pa = PTE2PA(*pte);
-  return pa+off;
+  return proc_kvmpa(nullptr,va);
 }
 
 // Create PTEs for virtual addresses starting at va that refer to
