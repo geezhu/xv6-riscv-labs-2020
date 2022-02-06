@@ -12,7 +12,7 @@ struct superblock;
 struct mbuf;
 struct sock;
 #endif
-
+#define nullptr ((void*)0);
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
