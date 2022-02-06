@@ -31,6 +31,39 @@ proc_kvmmap(struct proc* proc,uint64 va, uint64 pa, uint64 sz, int perm)
     }
 
 }
+// Free a process's page table, and free the
+// physical memory it refers to.
+void
+proc_freekpagetable(pagetable_t kernel_pagetable)
+{
+
+
+    // unmap uart registers
+    uvmunmap(kernel_pagetable, UART0, 1, 0);
+
+    // unmap virtio mmio disk interface
+    uvmunmap(kernel_pagetable, VIRTIO0, 1, 0);
+
+
+    // unmap PLIC
+    uvmunmap(kernel_pagetable,PLIC, PGROUNDUP(0x400000)/PGSIZE, 0);
+
+    // unmap kernel text executable and read-only.
+    uvmunmap(kernel_pagetable,KERNBASE, PGROUNDUP((uint64)etext-KERNBASE)/PGSIZE, 0);
+
+    // unmap kernel data and the physical RAM we'll make use of.
+    uvmunmap(kernel_pagetable,(uint64)etext, PGROUNDUP(PHYSTOP-(uint64)etext)/PGSIZE, 0);
+
+    // unmap the trampoline for trap entry/exit to
+    // the highest virtual address in the kernel.
+    uvmunmap(kernel_pagetable,TRAMPOLINE, 1, 0);
+
+    uvmunmap(kernel_pagetable, KSTACK(0), 1, 1);
+
+    //free the pagetable
+    freewalk(kernel_pagetable);
+}
+
 void
 proc_kvminit(struct proc* proc)
 {
