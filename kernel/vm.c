@@ -18,6 +18,7 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 extern char trampoline[]; // trampoline.S
 
 void        freewalk(pagetable_t pagetable);
+pte_t *     walk(pagetable_t pagetable, uint64 va, int alloc);
 /*
  * create a direct-map page table of process for the kernel.
  */
@@ -130,6 +131,28 @@ proc_kvminithart(struct proc* p)
         sfence_vma();
     }
 
+}
+//map user space to p->kernel_pagetable if newsz>oldsz
+//unmap p->kernel_pagetable if newsz<oldsz
+void
+proc_usermapping(struct proc* p, uint64 oldsz,uint64 newsz)
+{
+    if(newsz>p->sz){
+        panic("proc_usermapping");
+    };
+    if(newsz>PLIC){
+        panic("proc_usermapping");
+    };
+    if(oldsz>newsz){
+        uint64 npages= (PGROUNDUP(oldsz)- PGROUNDUP(newsz))/PGSIZE;
+        uvmunmap(p->kernel_pagetable, PGROUNDUP(newsz),npages,0);
+    } else if(oldsz<newsz){
+        for (uint64 va = PGROUNDUP(oldsz),desva= PGROUNDUP(newsz); va < desva; va+=PGSIZE) {
+            pte_t pte=*walk(p->pagetable,va,0);
+            if(mappages(p->kernel_pagetable, va, PGSIZE, PTE2PA(pte), PTE_FLAGS(pte)&~PTE_U) != 0)
+                panic("proc_usermapping: mappages");
+        }
+    }
 }
 /*
  * create a direct-map page table for the kernel.

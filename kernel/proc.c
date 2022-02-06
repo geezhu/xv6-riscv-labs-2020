@@ -133,8 +133,10 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  if(p->pagetable)
-    proc_freepagetable(p->pagetable, p->sz);
+  if(p->pagetable){
+      proc_freepagetable(p->pagetable, p->sz);
+      proc_usermapping(p,p->sz,0);
+  }
   if(p->kernel_pagetable){
     proc_freekpagetable(p->kernel_pagetable);
   }
@@ -224,7 +226,8 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
-
+  //map init proc
+  proc_usermapping(p,0,p->sz);
   p->state = RUNNABLE;
 
   release(&p->lock);
@@ -246,7 +249,9 @@ growproc(int n)
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+  uint64 oldsz=p->sz;
   p->sz = sz;
+  proc_usermapping(p,oldsz,oldsz+n);
   return 0;
 }
 
@@ -271,7 +276,7 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
-
+  proc_usermapping(np,0,np->sz);
   np->parent = p;
 
   // copy saved user registers.
