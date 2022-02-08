@@ -284,6 +284,7 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+  np->ustack=p->ustack;
   proc_usermapping(np,0,np->sz);
   np->parent = p;
 
