@@ -308,7 +308,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0){
-        printf("uvmunmap: not mapped");
+//        printf("uvmunmap: not mapped\n");
         continue;
     }
 //      panic("uvmunmap: not mapped");
