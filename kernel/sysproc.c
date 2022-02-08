@@ -95,3 +95,28 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+uint64
+sys_alarm(void)
+{
+    int cycle;
+    uint64 func;
+    struct proc* p=myproc();
+    if(argint(0, &cycle) < 0){
+        return -1;
+    }
+    if(argaddr(0, &func) < 0){
+        return -1;
+    }
+    p->init_tick=cycle;
+    p->left_tick=cycle;
+    p->periodic=func;
+    return 0;
+}
+uint64
+sys_sigret(void)
+{
+    struct proc* p=myproc();
+    p->left_tick=p->init_tick;
+    memmove(p->trapframe,p->backupframe, sizeof(struct trapframe));
+    return 0;
+}

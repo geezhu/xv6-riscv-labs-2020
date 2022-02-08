@@ -77,8 +77,19 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+  if(which_dev == 2){
+      if(p->init_tick!=0 && p->left_tick!=-1){
+          p->left_tick-=1;
+          if(p->left_tick==0){
+              p->left_tick-=1;
+              //user -1 to indicate the periodic handler not finished
+              memmove(p->backupframe,p->trapframe,sizeof(struct trapframe));
+              p->trapframe->epc=p->periodic;
+          }
+      }
+      yield();
+  }
+
 
   usertrapret();
 }

@@ -102,7 +102,7 @@ found:
     release(&p->lock);
     return 0;
   }
-
+  p->backupframe=p->trapframe+1;
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -115,6 +115,9 @@ found:
   //init kernel stack
   proc_kstackinit(p);
 
+  p->left_tick=0;
+  p->init_tick=0;
+  p->periodic=0;
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -149,6 +152,9 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->left_tick=0;
+  p->init_tick=0;
+  p->periodic=0;
 }
 
 // Create a user page table for a given process,

@@ -99,9 +99,13 @@ struct proc {
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table
   pagetable_t kernel_pagetable;       // Kernel page table
+  struct trapframe *backupframe; // data page for trampoline.S
   struct trapframe *trapframe; // data page for trampoline.S
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int init_tick;
+  int left_tick;
+  uint64 periodic;
 };
