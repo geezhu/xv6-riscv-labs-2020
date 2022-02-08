@@ -104,7 +104,7 @@ sys_alarm(void)
     if(argint(0, &cycle) < 0){
         return -1;
     }
-    if(argaddr(0, &func) < 0){
+    if(argaddr(1, &func) < 0){
         return -1;
     }
     p->init_tick=cycle;
