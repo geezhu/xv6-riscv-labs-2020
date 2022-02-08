@@ -143,6 +143,7 @@ freeproc(struct proc *p)
   if(p->kernel_pagetable){
     proc_freekpagetable(p->kernel_pagetable);
   }
+  p->kstack=0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
