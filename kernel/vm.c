@@ -148,8 +148,11 @@ proc_usermapping(struct proc* p, uint64 oldsz,uint64 newsz)
         uvmunmap(p->kernel_pagetable, PGROUNDUP(newsz),npages,0);
     } else if(oldsz<newsz){
         for (uint64 va = PGROUNDUP(oldsz),desva= PGROUNDUP(newsz); va < desva; va+=PGSIZE) {
-            pte_t pte=*walk(p->pagetable,va,0);
-            if(mappages(p->kernel_pagetable, va, PGSIZE, PTE2PA(pte), PTE_FLAGS(pte)&~PTE_U) != 0)
+            pte_t* pte=walk(p->pagetable,va,0);
+            if(!(PTE_FLAGS(*pte)&PTE_V)){
+                continue;
+            }
+            if(mappages(p->kernel_pagetable, va, PGSIZE, PTE2PA(*pte), PTE_FLAGS(*pte)&~PTE_U) != 0)
                 panic("proc_usermapping: mappages");
         }
     }
