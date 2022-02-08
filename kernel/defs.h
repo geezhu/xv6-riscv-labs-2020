@@ -84,7 +84,7 @@ int             pipewrite(struct pipe*, uint64, int);
 void            printf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
-
+void            backtrace();
 // proc.c
 int             cpuid(void);
 void            exit(int);

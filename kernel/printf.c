@@ -132,3 +132,17 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+void backtrace(){
+    struct stackframe{
+        struct stackframe * fp;
+        uint64* ra;
+    } ;
+    struct stackframe *sf;
+    sf=(struct stackframe*)(r_fp()-16);
+    struct stackframe* top1=(struct stackframe*)PGROUNDUP((uint64)sf);
+    struct stackframe* bottom1=(struct stackframe*)PGROUNDDOWN((uint64)sf);
+    while (sf<=top1&&sf>=bottom1){
+        printf("%p\n",sf->ra);
+        sf=sf->fp-1;
+    }
+}
