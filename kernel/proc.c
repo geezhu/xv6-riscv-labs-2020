@@ -156,6 +156,7 @@ freeproc(struct proc *p)
   p->left_tick=0;
   p->init_tick=0;
   p->periodic=0;
+  p->ustack=0;
 }
 
 // Create a user page table for a given process,
