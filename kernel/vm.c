@@ -138,12 +138,15 @@ proc_kvminithart(struct proc* p)
 void
 proc_usermapping(struct proc* p, uint64 oldsz,uint64 newsz)
 {
-    if(newsz>p->sz){
+    if(newsz> PGROUNDUP(p->sz)){
         panic("proc_usermapping");
     };
     if(newsz>PLIC){
-        panic("proc_usermapping");
+        newsz=PLIC;
     };
+    if(oldsz>PLIC){
+        oldsz=PLIC;
+    }
     if(oldsz>newsz){
         uint64 npages= (PGROUNDUP(oldsz)- PGROUNDUP(newsz))/PGSIZE;
         uvmunmap(p->kernel_pagetable, PGROUNDUP(newsz),npages,0);
