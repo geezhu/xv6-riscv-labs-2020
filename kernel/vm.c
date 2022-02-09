@@ -498,8 +498,21 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+    if(pa0 == 0){
+        struct proc* p=myproc();
+        uint64 va= PGROUNDDOWN(va0);
+        //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
+        //use PGROUNDDOWN+PGSIZE instead
+        if(va<p->sz && va!=(p->ustack-PGSIZE)){
+            if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
+                proc_usermapping(p,va, va+PGSIZE);
+            } else{
+                p->killed=1;
+            }
+        } else{
+            return -1;
+        }
+    }
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
@@ -518,7 +531,50 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
-  return copyin_new(pagetable,dst,srcva,len);
+    if(srcva<PLIC){
+        if(srcva+len<=PLIC){
+            return copyin_new(pagetable,dst,srcva,len);
+        } else{
+            uint64 copy_len=PLIC-srcva;
+            if(copyin_new(pagetable,dst,srcva,copy_len)==-1){
+                return -1;
+            } else{
+                dst+=copy_len;
+                len-=copy_len;
+                srcva=PLIC;
+            }
+        }
+    }
+    uint64 n, va0, pa0;
+
+    while(len > 0){
+        va0 = PGROUNDDOWN(srcva);
+        pa0 = walkaddr(pagetable, va0);
+        if(pa0 == 0){
+            struct proc* p=myproc();
+            uint64 va= PGROUNDDOWN(va0);
+            //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
+            //use PGROUNDDOWN+PGSIZE instead
+            if(va<p->sz && va!=(p->ustack-PGSIZE)){
+                if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
+                    proc_usermapping(p,va, va+PGSIZE);
+                } else{
+                    p->killed=1;
+                }
+            } else{
+                return -1;
+            }
+        }
+        n = PGSIZE - (srcva - va0);
+        if(n > len)
+            n = len;
+        memmove(dst, (void *)(pa0 + (srcva - va0)), n);
+
+        len -= n;
+        dst += n;
+        srcva = va0 + PGSIZE;
+    }
+    return 0;
 }
 
 // Copy a null-terminated string from user to kernel.
@@ -528,7 +584,74 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
-  return copyinstr_new(pagetable,dst,srcva,max);
+    if(srcva<PLIC){
+        if(srcva+max<=PLIC){
+            int ret= copyinstr_new(pagetable,dst,srcva,max);
+            if(ret==1){
+                return -1;
+            }
+            return ret;
+        } else{
+            uint64 copy_len=PLIC-srcva;
+            int ret;
+            if((ret=copyinstr_new(pagetable,dst,srcva,copy_len))==-1){
+                return -1;
+            } else if (ret==1){
+                dst+=copy_len;
+                max-=copy_len;
+                srcva=PLIC;
+            } else{
+                return 0;
+            }
+        }
+    }
+    uint64 n, va0, pa0;
+    int got_null = 0;
+
+    while(got_null == 0 && max > 0){
+        va0 = PGROUNDDOWN(srcva);
+        pa0 = walkaddr(pagetable, va0);
+        if(pa0 == 0){
+            struct proc* p=myproc();
+            uint64 va= PGROUNDDOWN(va0);
+            //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
+            //use PGROUNDDOWN+PGSIZE instead
+            if(va<p->sz && va!=(p->ustack-PGSIZE)){
+                if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
+                    proc_usermapping(p,va, va+PGSIZE);
+                } else{
+                    p->killed=1;
+                }
+            } else{
+                return -1;
+            }
+        }
+        n = PGSIZE - (srcva - va0);
+        if(n > max)
+            n = max;
+
+        char *p = (char *) (pa0 + (srcva - va0));
+        while(n > 0){
+            if(*p == '\0'){
+                *dst = '\0';
+                got_null = 1;
+                break;
+            } else {
+                *dst = *p;
+            }
+            --n;
+            --max;
+            p++;
+            dst++;
+        }
+
+        srcva = va0 + PGSIZE;
+    }
+    if(got_null){
+        return 0;
+    } else {
+        return -1;
+    }
 }
 void vmprint_impl(pagetable_t pagetable,int level){
     if(level == 2){
