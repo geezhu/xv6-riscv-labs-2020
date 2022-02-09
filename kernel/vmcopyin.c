@@ -49,10 +49,14 @@ copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   char *s = (char *) srcva;
   
   stats.ncopyinstr++;   // XXX lock
-  for(int i = 0; i < max && srcva + i < p->sz; i++){
+  int i;
+  for(i = 0; i < max && srcva + i < p->sz; i++){
     dst[i] = s[i];
     if(s[i] == '\0')
       return 0;
+  }
+  if(i==max){
+    return 1;
   }
   return -1;
 }
