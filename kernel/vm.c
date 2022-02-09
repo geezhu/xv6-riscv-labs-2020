@@ -19,6 +19,7 @@ extern char trampoline[]; // trampoline.S
 
 void        freewalk(pagetable_t pagetable);
 pte_t *     walk(pagetable_t pagetable, uint64 va, int alloc);
+void        pte_parser(pte_t pte);
 /*
  * create a direct-map page table of process for the kernel.
  */
@@ -542,4 +543,10 @@ void vmprint_impl(pagetable_t pagetable,int level){
             }
         }
     }
+}
+void pte_parser(pte_t pte){
+    uint64 pa=PTE2PA(pte);
+    uint64 flags= PTE_FLAGS(pte);
+#define b(x) (!(!(x)))
+    printf("PTE=(PA=%p,V=%d,U=%d,R=%d,W=%d,X=%d)\n",pa,  b(flags&PTE_V),   b(flags&PTE_U),  b(flags&PTE_R), b(flags&PTE_W), b(flags&PTE_X));
 }
