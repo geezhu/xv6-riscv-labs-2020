@@ -49,7 +49,10 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
+#define unexpected() printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid); \
+              printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());                  \
+              p->killed = 1;
+
   if(r_scause() == 8){
     // system call
 
@@ -67,10 +70,25 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(PGFAULT(r_scause())){
+
+      uint64 va= PGROUNDDOWN(r_stval());
+//      printf("[%d]rsc=%d,rst=%p,va=%p,p->sz=%p\n",p->pid,r_scause(),r_stval(),va,p->sz);
+      //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
+      //use PGROUNDDOWN+PGSIZE instead
+      if(va<p->sz && va!=(p->ustack-PGSIZE)){
+          if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
+              proc_usermapping(p,va, va+PGSIZE);
+          } else{
+//              printf("out of mem\n");
+//              unexpected();
+                p->killed=1;
+          }
+      } else{
+          unexpected();
+      }
   } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
+      unexpected();
   }
 
   if(p->killed)
