@@ -172,6 +172,20 @@ kerneltrap()
   if(intr_get() != 0)
     panic("kerneltrap: interrupts enabled");
 
+  if(PGFAULT(scause)){
+      struct proc* p=myproc();
+      uint64 va= PGROUNDDOWN(r_stval());
+      //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
+      //use PGROUNDDOWN+PGSIZE instead
+      if(va<p->sz && va!=(p->ustack-PGSIZE)){
+          if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
+              proc_usermapping(p,va, va+PGSIZE);
+          } else{
+              p->killed=1;
+          }
+          return;
+      }
+  }
   if((which_dev = devintr()) == 0){
     printf("scause %p\n", scause);
     printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
