@@ -27,7 +27,12 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  char *ptr=end+PGCOUNT;
+  while (ptr!=end){
+      *ptr=0;
+      ptr--;
+  }
+  freerange(end+PGCOUNT, (void*)PHYSTOP);
 }
 
 void
