@@ -64,6 +64,10 @@ void            ramdiskintr(void);
 void            ramdiskrw(struct buf*);
 
 // kalloc.c
+extern char end[]; // first address after kernel.
+// defined by kernel.ld.
+#define PGCOUNT     ((PHYSTOP-PGROUNDDOWN((uint64)end+PGSIZE))/PGSIZE)
+#define map(x)      ((PGROUNDDOWN(x)-PGROUNDUP((uint64)end+PGCOUNT))/PGSIZE)
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
