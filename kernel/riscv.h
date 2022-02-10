@@ -339,6 +339,11 @@ sfence_vma()
 #define PTE_W (1L << 2)
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // 1 -> user can access
+#define PTE_G (1L << 5) // 1 -> global mapping
+#define PTE_A (1L << 6) // 1 -> accessed
+#define PTE_D (1L << 7) // 1 -> dirty
+#define PTE_C (1L << 8) // 1 -> copy on write
+
 #define LOAD_PGFAULT  13
 #define STORE_PGFAULT 15
 //for both load and store page fault
