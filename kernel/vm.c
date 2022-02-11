@@ -596,6 +596,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
             if(va<p->sz && va!=(p->ustack-PGSIZE)){
                 if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
                     proc_usermapping(p,va, va+PGSIZE);
+                    pa0 = walkaddr(pagetable, va0);
                 } else{
                     p->killed=1;
                 }
