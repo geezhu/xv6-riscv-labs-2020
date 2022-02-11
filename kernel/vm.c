@@ -525,7 +525,12 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0){
+    if(va0<MAXVA){
+        pte=  walk(pagetable,va0,0);
+    } else{
+        return -1;
+    }
+    if(pa0 == 0 || IS_COW(*pte)){
         struct proc* p=myproc();
         uint64 va= PGROUNDDOWN(va0);
         //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
