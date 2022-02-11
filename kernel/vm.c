@@ -364,7 +364,8 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
   char *mem;
   uint64 a;
-
+  uint64 flags;
+  pte_t* pte;
   if(newsz < oldsz)
     return oldsz;
 
@@ -375,11 +376,24 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
-    memset(mem, 0, PGSIZE);
-    if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
-      kfree(mem);
-      uvmdealloc(pagetable, a, oldsz);
-      return 0;
+    pte= walk(pagetable,a,0);
+    if(pte!=0&& IS_COW(*pte)){
+//        mem=kalloc();
+        flags=COW_WFLAGS(*pte);
+        memmove(mem,(char *)PTE2PA(*pte),PGSIZE);
+        uvmunmap(pagetable,a,1,1);
+        proc_usermapping(myproc(),a+PGSIZE,a);
+        if(mappages(pagetable, a, PGSIZE, (uint64)mem, flags) != 0){
+            kfree(mem);
+            return 0;
+        }
+    }else{
+        memset(mem, 0, PGSIZE);
+        if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+            kfree(mem);
+            uvmdealloc(pagetable, a, oldsz);
+            return 0;
+        }
     }
   }
   return newsz;
