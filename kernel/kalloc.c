@@ -20,18 +20,30 @@ struct run {
 
 struct {
   struct spinlock lock;
+  struct spinlock reflock;
   struct run *freelist;
 } kmem;
 
 void
+kreflock(){
+    acquire(&kmem.reflock);
+}
+void
+krefunlock(){
+    release(&kmem.reflock);
+}
+void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&kmem.reflock, "kmem.refcount");
   char *ptr=end+PGCOUNT;
+  kreflock();
   while (ptr!=end){
-      *ptr=0;
+      *ptr=1;
       ptr--;
   }
+  krefunlock();
   freerange(end+PGCOUNT, (void*)PHYSTOP);
 }
 
@@ -55,7 +67,13 @@ kfree(void *pa)
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
-
+  kreflock();
+  dec_refcount(pa);
+  if(refcount(pa)!=0){
+      krefunlock();
+      return;
+  }
+  krefunlock();
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -80,7 +98,10 @@ kalloc(void)
   if(r)
     kmem.freelist = r->next;
   release(&kmem.lock);
-
+  kreflock();
+  if(r)
+      inc_refcount(r);
+  krefunlock();
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
