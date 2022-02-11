@@ -521,7 +521,7 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
-
+  pte_t *pte;
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
@@ -530,11 +530,17 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
         uint64 va= PGROUNDDOWN(va0);
         //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
         //use PGROUNDDOWN+PGSIZE instead
+        if(va==p->ustack){
+            printf("[%d]ustack_pf\n",p->pid);
+            pte_parser(*pte);
+        }
         if(va<p->sz && va!=(p->ustack-PGSIZE)){
             if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
                 proc_usermapping(p,va, va+PGSIZE);
+                pa0 = walkaddr(pagetable, va0);
             } else{
                 p->killed=1;
+                return 0;
             }
         } else{
             return -1;
