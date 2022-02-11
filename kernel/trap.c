@@ -76,11 +76,14 @@ usertrap(void)
 //      printf("[%d]rsc=%d,rst=%p,va=%p,p->sz=%p\n",p->pid,r_scause(),r_stval(),va,p->sz);
       //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
       //use PGROUNDDOWN+PGSIZE instead
+//      if(va==p->ustack){
+//          printf("[%d]ustack_pf\n",p->pid);
+//      }
       if(va<p->sz && va!=(p->ustack-PGSIZE)){
           if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
               proc_usermapping(p,va, va+PGSIZE);
           } else{
-//              printf("out of mem\n");
+//              printf("[%d]out of mem\n",p->pid);
 //              unexpected();
                 p->killed=1;
           }
@@ -91,8 +94,11 @@ usertrap(void)
       unexpected();
   }
 
-  if(p->killed)
-    exit(-1);
+  if(p->killed){
+//      printf("[%d]exit(-1)\n",p->pid);
+      exit(-1);
+  }
+
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2){
