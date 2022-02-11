@@ -343,7 +343,9 @@ sfence_vma()
 #define PTE_A (1L << 6) // 1 -> accessed
 #define PTE_D (1L << 7) // 1 -> dirty
 #define PTE_C (1L << 8) // 1 -> copy on write
-
+#define COW_FLAGS(pte) ((PTE_FLAGS(pte)|PTE_C)&~PTE_W)
+#define COW_WFLAGS(pte) ((PTE_FLAGS(pte)|PTE_W)&~PTE_C)
+#define IS_COW(pte) ((pte&PTE_C)&&(!(pte&PTE_W))&&(pte&PTE_V))
 #define LOAD_PGFAULT  13
 #define STORE_PGFAULT 15
 //for both load and store page fault
