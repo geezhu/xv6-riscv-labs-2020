@@ -472,14 +472,27 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     }
 //      panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    if(i==myproc()->ustack){
+        //not to copy ustack
+        flags = PTE_FLAGS(*pte);
+        if((mem = kalloc()) == 0)
+            goto err;
+        memmove(mem, (char*)pa, PGSIZE);
+        if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+            kfree(mem);
+            goto err;
+        }
+        continue;
+    }
+
+    *pte= PA2PTE(pa)| COW_FLAGS(*pte);
+    if(mappages(new, i, PGSIZE, (uint64)pa, COW_FLAGS(*pte)) != 0){
+//      kfree(mem);
       goto err;
     }
+    kreflock();
+    inc_refcount(pa);
+    krefunlock();
   }
   return 0;
 
