@@ -67,11 +67,15 @@ void            ramdiskrw(struct buf*);
 extern char end[]; // first address after kernel.
 // defined by kernel.ld.
 #define PGCOUNT     ((PHYSTOP-PGROUNDDOWN((uint64)end+PGSIZE))/PGSIZE)
-#define map(x)      ((PGROUNDDOWN(x)-PGROUNDUP((uint64)end+PGCOUNT))/PGSIZE)
+#define map(x)      ((PGROUNDDOWN((uint64)x)-PGROUNDUP((uint64)end+PGCOUNT))/PGSIZE)
+#define refcount(x) end[map((uint64)x)]
+#define inc_refcount(x) end[map((uint64)x)]++
+#define dec_refcount(x) end[map((uint64)x)]--
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
-
+void            kreflock();
+void            krefunlock();
 // log.c
 void            initlog(int, struct superblock*);
 void            log_write(struct buf*);
@@ -173,6 +177,7 @@ void            uvminit(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
 #ifdef SOL_COW
+int             uvmcopy(pagetable_t, pagetable_t, uint64);
 #else
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
 #endif
