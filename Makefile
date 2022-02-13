@@ -51,17 +51,6 @@ OBJS += \
 endif
 
 
-ifeq ($(LAB),pgtbl)
-OBJS += \
-	$K/vmcopyin.o
-endif
-
-ifeq ($(LAB),$(filter $(LAB), pgtbl lock))
-OBJS += \
-	$K/stats.o\
-	$K/sprintf.o
-endif
-
 
 ifeq ($(LAB),net)
 OBJS += \
