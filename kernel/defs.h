@@ -195,8 +195,8 @@ void            proc_kvminithart(struct proc* p);
 uint64          proc_kvmpa(struct proc*p,uint64 va);
 void            proc_usermapping(struct proc* p, uint64 oldsz,uint64 newsz);
 //vmcopyin.c
-int copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len);
-int copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max);
+int             copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len);
+int             copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max);
 // plic.c
 void            plicinit(void);
 void            plicinithart(void);
