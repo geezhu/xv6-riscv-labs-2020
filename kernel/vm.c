@@ -18,7 +18,7 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 extern char trampoline[]; // trampoline.S
 
 void        freewalk(pagetable_t pagetable);
-pte_t *     walk(pagetable_t pagetable, uint64 va, int alloc);
+static pte_t *     walk(pagetable_t pagetable, uint64 va, int alloc);
 void        pte_parser(pte_t pte);
 /*
  * create a direct-map page table of process for the kernel.
