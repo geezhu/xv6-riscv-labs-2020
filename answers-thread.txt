@@ -1,0 +1,8 @@
+Why are there missing keys with 2 threads, but not with 1 thread? Identify a sequence of events with 2 threads that can lead to a key being missing. Submit your sequence with a short explanation in answers-thread.txt
+To avoid this sequence of events, insert lock and unlock statements in put and get in notxv6/ph.c so that the number of keys missing is always 0 with two threads. The relevant pthread calls are:
+
+pthread_mutex_t lock;            // declare a lock
+pthread_mutex_init(&lock, NULL); // initialize the lock
+pthread_mutex_lock(&lock);       // acquire lock
+pthread_mutex_unlock(&lock);     // release lock
+You're done when make grade says that your code passes the ph_safe test, which requires zero missing keys with two threads. It's OK at this point to fail the ph_fast test.
