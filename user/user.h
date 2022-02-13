@@ -26,6 +26,8 @@ int sleep(int);
 int uptime(void);
 int sigalarm(int ticks, void (*handler)());
 int sigreturn(void);
+int sigresume(void);
+void* sigra(void);
 #ifdef LAB_NET
 int connect(uint32, uint16, uint16);
 #endif

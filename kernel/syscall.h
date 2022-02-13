@@ -22,3 +22,5 @@
 #define SYS_close  21
 #define SYS_sigalarm  22
 #define SYS_sigreturn  23
+#define SYS_sigresume  24
+#define SYS_sigra      25

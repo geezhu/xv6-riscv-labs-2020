@@ -36,3 +36,8 @@ thread_switch:
     ld s10, 96(a1)
     ld s11, 104(a1)
 	ret    /* return to ra */
+	.globl  thread_yield
+	.globl  thread_yield_adaper
+thread_yield_adaper:
+    call    thread_yield
+    jr a0

@@ -107,8 +107,12 @@ usertrap(void)
           if(p->left_tick==0){
               p->left_tick-=1;
               //user -1 to indicate the periodic handler not finished
+//              printf("save trapframe\n");
               memmove(p->backupframe,p->trapframe,sizeof(struct trapframe));
+              p->backup_epc=p->trapframe->epc;
+//              printf("trap from %p\n",p->backup_epc);
               p->trapframe->epc=p->periodic;
+
           }
       }
       yield();

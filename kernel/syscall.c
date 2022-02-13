@@ -106,6 +106,8 @@ extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_alarm(void);
 extern uint64 sys_sigret(void);
+extern uint64 sys_sigresume(void);
+extern uint64 sys_sigra(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]      sys_fork,
@@ -131,6 +133,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_close]     sys_close,
 [SYS_sigalarm]  sys_alarm,
 [SYS_sigreturn] sys_sigret,
+[SYS_sigresume] sys_sigresume,
+[SYS_sigra]     sys_sigra,
 };
 
 void

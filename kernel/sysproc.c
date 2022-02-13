@@ -120,3 +120,20 @@ sys_sigret(void)
     memmove(p->trapframe,p->backupframe, sizeof(struct trapframe));
     return 0;
 }
+uint64
+sys_sigresume(void)
+{
+//    printf("resume\n");
+//    printf("------\n");
+    struct proc* p=myproc();
+    p->left_tick=p->init_tick;
+    return 0;
+}
+uint64
+sys_sigra(void)
+{
+//    printf("ra\n");
+    struct proc* p=myproc();
+//    printf("ret ra=%p\n",p->backup_epc);
+    return p->backup_epc;
+}
