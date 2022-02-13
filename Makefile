@@ -178,7 +178,6 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
-	$U/_uthread1\
 
 
 
@@ -206,8 +205,8 @@ endif
 
 ifeq ($(LAB),thread)
 UPROGS += \
-	$U/_uthread
-
+	$U/_uthread\
+	$U/_uthread1
 $U/uthread_switch.o : $U/uthread_switch.S
 	$(CC) $(CFLAGS) -c -o $U/uthread_switch.o $U/uthread_switch.S
 
