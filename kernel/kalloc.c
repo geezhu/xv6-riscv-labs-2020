@@ -19,31 +19,34 @@ struct run {
 };
 
 struct {
-  struct spinlock lock;
-  struct spinlock reflock;
-  struct run *freelist;
+  struct spinlock lock[NCPU];
+  struct spinlock reflock[NCPU];
+  struct run *freelist[NCPU];
 } kmem;
-
+#define cpu_map(addr) (((uint64)addr/PGSIZE)%NCPU)
+//#define cpu_map(addr) 0
 void
-kreflock(){
-    acquire(&kmem.reflock);
+kreflock(void* pa){
+    acquire(&kmem.reflock[cpu_map(pa)]);
 }
 void
-krefunlock(){
-    release(&kmem.reflock);
+krefunlock(void* pa){
+    release(&kmem.reflock[cpu_map(pa)]);
 }
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
-  initlock(&kmem.reflock, "kmem.refcount");
+  for (int i = 0; i < NCPU; ++i) {
+      initlock(&kmem.lock[i], "kmem");
+      initlock(&kmem.reflock[i], "kmem.refcount");
+  }
   char *ptr=end+PGCOUNT;
-  kreflock();
   while (ptr!=end){
+      kreflock(ptr);
       *ptr=1;
+      krefunlock(ptr);
       ptr--;
   }
-  krefunlock();
   freerange(end+PGCOUNT, (void*)PHYSTOP);
 }
 
@@ -64,27 +67,58 @@ void
 kfree(void *pa)
 {
   struct run *r;
-
+//  printf("kfree %p\n",pa);
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
-  kreflock();
+  kreflock(pa);
   dec_refcount(pa);
   if(refcount(pa)!=0){
-      krefunlock();
+      krefunlock(pa);
       return;
   }
-  krefunlock();
+  krefunlock(pa);
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
-
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+//  printf("cpuid=%d\n", cpu_map(pa));
+  acquire(&kmem.lock[cpu_map(pa)]);
+  r->next = kmem.freelist[cpu_map(pa)];
+  kmem.freelist[cpu_map(pa)] = r;
+  release(&kmem.lock[cpu_map(pa)]);
 }
-
+void * kget(int cpuid){
+    struct run*r=0;
+    acquire(&kmem.lock[cpuid]);
+    r = kmem.freelist[cpuid];
+    if(r)
+        kmem.freelist[cpuid] = r->next;
+    release(&kmem.lock[cpuid]);
+    return r;
+}
+void *
+ksteal(int cpuid){
+    struct run *r=0;
+    int i=cpuid+1;
+    for (; i !=cpuid ; ++i) {
+        if(i==NCPU){
+//            printf("reset to zero");
+            i=0;
+            if(i==cpuid){
+                break;
+            }
+        }
+        r= kget(i);
+        if(r){
+//            printf("steal from cpu %d\n",i);
+            break;
+        }
+    }
+//    if(i==cpuid){
+//        printf("out of mem\n");
+//    }
+    return r;
+}
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
@@ -92,16 +126,16 @@ void *
 kalloc(void)
 {
   struct run *r;
-
-  acquire(&kmem.lock);
-  r = kmem.freelist;
-  if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
-  kreflock();
+  push_off();
+  uint64 id=cpuid();
+  r= kget(id);
+  if(!r)
+      r= ksteal(id);
+  pop_off();
+  kreflock(r);
   if(r)
       inc_refcount(r);
-  krefunlock();
+  krefunlock(r);
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;

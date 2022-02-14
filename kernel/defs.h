@@ -74,8 +74,8 @@ extern char end[]; // first address after kernel.
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
-void            kreflock();
-void            krefunlock();
+void            kreflock(void* pa);
+void            krefunlock(void* pa);
 // log.c
 void            initlog(int, struct superblock*);
 void            log_write(struct buf*);

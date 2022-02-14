@@ -490,9 +490,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 //      kfree(mem);
       goto err;
     }
-    kreflock();
+    kreflock((void *)pa);
     inc_refcount(pa);
-    krefunlock();
+    krefunlock((void *)pa);
   }
   return 0;
 
