@@ -24,3 +24,4 @@
 #define SYS_sigreturn  23
 #define SYS_sigresume  24
 #define SYS_sigra      25
+#define SYS_symlink      25

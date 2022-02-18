@@ -40,3 +40,4 @@ entry("sigalarm");
 entry("sigreturn");
 entry("sigresume");
 entry("sigra");
+entry("symlink");

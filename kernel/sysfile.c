@@ -254,6 +254,9 @@ create(char *path, short type, short major, short minor)
     ilock(ip);
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
       return ip;
+    if(ip->type==T_SYMLINK){
+//        printf("symlink exists!\n");
+    }
     iunlockput(ip);
     return 0;
   }
@@ -309,10 +312,18 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
+    if(ip->type == T_DIR && (omode&~O_NOFOLLOW) != O_RDONLY){
       iunlockput(ip);
       end_op();
       return -1;
+    }
+
+    if(ip->type==T_SYMLINK&&!(omode&O_NOFOLLOW)){
+        ip=nameilink(ip);
+        if(ip==0){
+            end_op();
+            return -1;
+        }
     }
   }
 
@@ -341,7 +352,7 @@ sys_open(void)
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
 
-  if((omode & O_TRUNC) && ip->type == T_FILE){
+  if((omode & O_TRUNC) && (ip->type == T_FILE||ip->type==T_SYMLINK)){
     itrunc(ip);
   }
 
@@ -350,7 +361,27 @@ sys_open(void)
 
   return fd;
 }
-
+uint64 sys_symlink(void){
+    char target[MAXPATH];
+    char path[MAXPATH];
+    if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0){
+        return -1;
+    }
+    begin_op();
+    struct inode *ip=create(path, T_SYMLINK, 0, 0);
+    if(ip==0){
+        end_op();
+        return -1;
+    }
+    if(symlink(ip,target)==0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+    }
+    iunlockput(ip);
+    end_op();
+    return 0;
+};
 uint64
 sys_mkdir(void)
 {

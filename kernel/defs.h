@@ -57,7 +57,8 @@ int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
-
+struct inode*   symlink(struct inode* ip, char *name);
+struct inode*   nameilink(struct inode* link_ip);
 // ramdisk.c
 void            ramdiskinit(void);
 void            ramdiskintr(void);
@@ -173,7 +174,7 @@ int             uartgetc(void);
 // vm.c
 void            kvminit(void);
 void            kvminithart(void);
-void            kvmmap(pagetable_t, uint64, uint64, uint64, int);
+void            kvmmap(uint64 va, uint64 pa, uint64 sz, int perm);
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
 pagetable_t     uvmcreate(void);
 void            uvminit(pagetable_t, uchar *, uint);

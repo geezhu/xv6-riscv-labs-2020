@@ -389,8 +389,8 @@ bmap(struct inode *ip, uint bn)
 
   if(bn < NINDIRECT){
     // Load indirect block, allocating if necessary.
-    if((addr = ip->addrs[NDIRECT]) == 0)
-      ip->addrs[NDIRECT] = addr = balloc(ip->dev);
+    if((addr = ip->addrs[INDIRECT]) == 0)
+      ip->addrs[INDIRECT] = addr = balloc(ip->dev);
     bp = bread(ip->dev, addr);
     a = (uint*)bp->data;
     if((addr = a[bn]) == 0){
@@ -399,6 +399,28 @@ bmap(struct inode *ip, uint bn)
     }
     brelse(bp);
     return addr;
+  }
+  bn-= NINDIRECT;
+  if(bn < NDOUBLE){
+      if((addr = ip->addrs[DOUBLE]) == 0)
+          ip->addrs[DOUBLE] = addr = balloc(ip->dev);
+      bp = bread(ip->dev, addr);
+      a = (uint*)bp->data;
+      uint cn=bn/NINDIRECT;
+      uint dn=bn%NINDIRECT;
+      if((addr = a[cn])==0){
+          a[cn]=addr= balloc(ip->dev);
+          log_write(bp);
+      }
+      brelse(bp);
+      bp = bread(ip->dev, addr);
+      a = (uint*)bp->data;
+      if((addr=a[dn])==0){
+          a[dn]=addr= balloc(ip->dev);
+          log_write(bp);
+      }
+      brelse(bp);
+      return addr;
   }
 
   panic("bmap: out of range");
@@ -420,16 +442,38 @@ itrunc(struct inode *ip)
     }
   }
 
-  if(ip->addrs[NDIRECT]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT]);
+  if(ip->addrs[INDIRECT]){
+    bp = bread(ip->dev, ip->addrs[INDIRECT]);
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
       if(a[j])
         bfree(ip->dev, a[j]);
     }
     brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT]);
+    bfree(ip->dev, ip->addrs[INDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+  struct buf* bp1;
+  uint* b;
+  if(ip->addrs[DOUBLE]){
+      bp= bread(ip->dev,ip->addrs[DOUBLE]);
+      a = (uint*)bp->data;
+      //free all double block
+      for (i = 0; i < INDIRECT; ++i) {
+          if(a[i]){
+              bp1= bread(ip->dev,a[i]);
+              b=(uint*)bp1->data;
+              for (int j= 0; j < INDIRECT; ++j) {
+                  if(b[j]){
+                      bfree(ip->dev,b[j]);
+                  }
+              }
+              bfree(ip->dev,a[i]);
+          }
+      }
+      brelse(bp);
+      bfree(ip->dev, ip->addrs[DOUBLE]);
+      ip->addrs[DOUBLE] = 0;
   }
 
   ip->size = 0;
@@ -620,13 +664,19 @@ skipelem(char *path, char *name)
     path++;
   return path;
 }
-
+#define symlink_depth 10
+struct inode*
+nameilink_impl(struct inode* link_ip,uint depth);
+struct inode*
+nameilink(struct inode* link_ip){
+    return nameilink_impl(link_ip,symlink_depth);
+};
 // Look up and return the inode for a path name.
 // If parent != 0, return the inode for the parent and copy the final
 // path element into name, which must have room for DIRSIZ bytes.
 // Must be called inside a transaction since it calls iput().
 static struct inode*
-namex(char *path, int nameiparent, char *name)
+namex(char *path, int nameiparent, char *name,uint depth)
 {
   struct inode *ip, *next;
 
@@ -637,6 +687,13 @@ namex(char *path, int nameiparent, char *name)
 
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
+    while (ip->type==T_SYMLINK){
+        depth--;
+        ip= nameilink_impl(ip,depth);
+        if(ip==0){
+            return 0;
+        }
+    }
     if(ip->type != T_DIR){
       iunlockput(ip);
       return 0;
@@ -664,11 +721,80 @@ struct inode*
 namei(char *path)
 {
   char name[DIRSIZ];
-  return namex(path, 0, name);
+  return namex(path, 0, name,symlink_depth);
 }
 
 struct inode*
 nameiparent(char *path, char *name)
 {
-  return namex(path, 1, name);
+  return namex(path, 1, name,symlink_depth);
+}
+struct inode*
+symlink(struct inode* ip, char *name)
+{
+    if(ip->type!=T_SYMLINK){
+        return 0;
+    }
+    uint64 len= strlen(name)+1;
+    if(len<MAXPATH){
+        if(writei(ip,0,(uint64)name,0,len)!=len){
+            return 0;
+        };
+    } else{
+        panic("path too long");
+    }
+    return ip;
+}
+int fetch_path(struct inode* ip,char * path){
+    uint size=ip->size;
+    if(size<MAXPATH){
+        if(readi(ip,0,(uint64)path,0,size)!=size){
+            return 1;
+        }
+    }else{
+        panic("path too long\n");
+        return 1;
+    }
+
+    return 0;
+};
+struct inode*
+nameilink_impl(struct inode* link_ip,uint depth)
+{
+    char path[MAXPATH];
+    if(link_ip==0){
+        panic("nullptr\n");
+    }
+    if(fetch_path(link_ip,path)){
+        return 0;
+    }
+    iunlockput(link_ip);
+    if(depth==0){
+        return 0;
+    }
+    char name[DIRSIZ];
+    struct inode* ip;
+    int i = 0;
+    for (; i < depth; ++i) {
+        ip=namex(path,0,name,depth);
+        if(ip==0){
+            break;
+        } else {
+            ilock(ip);
+        }
+        if(ip->type!=T_SYMLINK){
+            break;
+        }else{
+            if(fetch_path(ip,path)){
+                iunlockput(ip);
+                return 0;
+            }
+            iunlockput(ip);
+            ip=0;
+        }
+    }
+    if(i==depth){
+//        printf("warning: recursive symlink !(depth>10)\n");
+    }
+    return ip;
 }

@@ -34,8 +34,9 @@ struct inode {
   short nlink;
   uint size;
 #ifdef SOL_FS
+  uint addrs[N_FILEADDR];
 #else
-  uint addrs[NDIRECT+1];
+  uint addrs[N_FILEADDR];
 #endif
 };
 
