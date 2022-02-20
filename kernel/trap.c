@@ -85,7 +85,7 @@ usertrap(void)
           } else{
 //              printf("[%d]out of mem\n",p->pid);
 //              unexpected();
-                p->killed=1;
+              p->killed=1;
           }
       } else{
           unexpected();

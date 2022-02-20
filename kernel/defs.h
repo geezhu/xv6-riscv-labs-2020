@@ -199,6 +199,14 @@ void            proc_kstackinit(struct proc* p);
 void            proc_kvminithart(struct proc* p);
 uint64          proc_kvmpa(struct proc*p,uint64 va);
 void            proc_usermapping(struct proc* p, uint64 oldsz,uint64 newsz);
+int             mmap_valid(struct proc* p,uint64 va);
+int             load_vma(struct proc* p,uint64 va,int index);
+int             copy(pagetable_t, pagetable_t, uint64,uint64);
+int             copy_vma(struct proc* p,struct proc* np);
+int             unmap_vma(struct proc* p,uint64 begin,uint64 end,int vma_index);
+void            unmap_all_vma(struct proc* p);
+int             map_vma(struct proc* p,uint64 begin,uint64 end, int prot, int flags,struct file* f, uint32 offset);
+int             page_fault_handler(struct proc* p,uint64 va);
 //vmcopyin.c
 int             copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len);
 int             copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max);

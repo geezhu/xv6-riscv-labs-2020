@@ -382,6 +382,27 @@ uint64 sys_symlink(void){
     end_op();
     return 0;
 };
+uint64 sys_mmap(void){
+    uint64 begin;
+    int length;
+    int prot;
+    int flags;
+    int fd;
+    int offset;
+    struct file* f;
+    if(argaddr(0, &begin) < 0 || argint(1,&length) < 0|| argint(2,&prot) < 0 || argint(3,&flags) < 0|| argfd(4,&fd,&f) < 0|| argint(5,&offset) < 0){
+        return -1;
+    }
+    return map_vma(myproc(),begin,begin+length,prot,flags,f,offset);
+};
+uint64 sys_munmap(void){
+    uint64 begin;
+    int length;
+    if(argaddr(0, &begin) < 0 || argint(1, &length) < 0){
+        return -1;
+    }
+    return unmap_vma(myproc(),begin,begin+length, mmap_valid(myproc(),begin));
+};
 uint64
 sys_mkdir(void)
 {

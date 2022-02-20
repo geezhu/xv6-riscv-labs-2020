@@ -29,6 +29,8 @@ int sigreturn(void);
 int sigresume(void);
 void* sigra(void);
 int symlink(char *target, char *path);
+void *mmap(void *addr, uint32 length, int prot, int flags,int fd, uint32 offset);
+int  munmap(void *addr,uint32 len);
 #ifdef LAB_NET
 int connect(uint32, uint16, uint16);
 #endif

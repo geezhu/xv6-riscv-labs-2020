@@ -7,7 +7,9 @@
 #include "fs.h"
 #include "spinlock.h"
 #include "proc.h"
-
+#include "fcntl.h"
+#include "sleeplock.h"
+#include "file.h"
 /*
  * the kernel's page table.
  */
@@ -141,6 +143,10 @@ proc_usermapping(struct proc* p, uint64 oldsz,uint64 newsz)
     if(newsz> PGROUNDUP(p->sz)){
         panic("proc_usermapping");
     };
+    if(newsz>=p->vma_bound||oldsz>=p->vma_bound){
+        printf("warning mmap crash with pagetable mapping");
+        return;
+    }
     if(newsz>PLIC){
         newsz=PLIC;
     };
@@ -456,12 +462,23 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
+    return copy(old,new,0,sz);
+}
+// Given a parent process's page table, copy
+// its memory into a child's page table.
+// Copies both the page table and the
+// physical memory.
+// returns 0 on success, -1 on failure.
+// frees any allocated pages on failure.
+int
+copy(pagetable_t old, pagetable_t new, uint64 begin,uint64 copy_end)
+{
   pte_t *pte;
   uint64 pa, i;
   uint flags;
   char *mem;
 
-  for(i = 0; i < sz; i += PGSIZE){
+  for(i = begin; i < copy_end; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0){
         continue;
     }
@@ -539,17 +556,13 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
             printf("[%d]ustack_pf\n",p->pid);
             pte_parser(*pte);
         }
-        if(va<p->sz && va!=(p->ustack-PGSIZE)){
-            if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
-                proc_usermapping(p,va, va+PGSIZE);
-                pa0 = walkaddr(pagetable, va0);
-            } else{
-                p->killed=1;
-                return 0;
-            }
-        } else{
+        int ret;
+        if((ret=page_fault_handler(p,va))==-1){
             return -1;
+        } else if(ret==1){
+            return 0;
         }
+        pa0= walkaddr(pagetable,va0);
     }
     n = PGSIZE - (dstva - va0);
     if(n > len)
@@ -593,16 +606,13 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
             uint64 va= PGROUNDDOWN(va0);
             //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
             //use PGROUNDDOWN+PGSIZE instead
-            if(va<p->sz && va!=(p->ustack-PGSIZE)){
-                if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
-                    proc_usermapping(p,va, va+PGSIZE);
-                    pa0 = walkaddr(pagetable, va0);
-                } else{
-                    p->killed=1;
-                }
-            } else{
+            int ret;
+            if((ret=page_fault_handler(p,va))==-1){
                 return -1;
+            } else if(ret==1){
+                return 0;
             }
+            pa0= walkaddr(pagetable,va0);
         }
         n = PGSIZE - (srcva - va0);
         if(n > len)
@@ -655,15 +665,13 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
             uint64 va= PGROUNDDOWN(va0);
             //don't use PGROUNDUP ,it's possible that will equal to PGROUNDDOWN
             //use PGROUNDDOWN+PGSIZE instead
-            if(va<p->sz && va!=(p->ustack-PGSIZE)){
-                if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
-                    proc_usermapping(p,va, va+PGSIZE);
-                } else{
-                    p->killed=1;
-                }
-            } else{
+            int ret;
+            if((ret=page_fault_handler(p,va))==-1){
                 return -1;
+            } else if(ret==1){
+                return 0;
             }
+            pa0= walkaddr(pagetable,va0);
         }
         n = PGSIZE - (srcva - va0);
         if(n > max)
@@ -722,4 +730,225 @@ void pte_parser(pte_t pte){
 #define b(x) (!(!(x)))
     printf("PTE=(PA=%p,V=%d,U=%d,R=%d,W=%d,X=%d,C=%d)\n",pa,  b(flags&PTE_V),   b(flags&PTE_U),  b(flags&PTE_R), b(flags&PTE_W), b(flags&PTE_X),
            b(flags&PTE_C));
+#undef b
+}
+//-1 for err other for index
+int mmap_valid(struct proc* p,uint64 va){
+    if(va<p->vma_bound||va<TRAPFRAME){
+       return 0;
+    }
+    int i;
+    for (i = 0; i < NVMA; ++i) {
+        if(p->vma[i].valid){
+            if(p->vma[i].vm_start>va){
+                break;
+            }
+        } else{
+            break;
+        }
+    }
+    if(i==0){
+        return -1;
+    }
+//  p->vma[i-1].vm_start<=va;
+//  it's ok that vm_end>=va&&va+PGSIZE>vm_end;
+    if(p->vma[i-1].vm_end<=va){
+        return -1;
+    }
+    return i-1;
+};
+int load_vma(struct proc* p,uint64 va,int index){
+#define min(a,b) ((a<b)?(a):(b))
+    struct file* f=0;
+    struct virtual_memory_area* vma=&p->vma[index];
+    uint32 offset=va-vma->vm_start+vma->offset;
+    uint len=vma->vm_end-va;
+    len=min(len,PGSIZE);
+    if(offset<vma->offset){
+        printf("load_vma\n");
+        return -1;
+    }
+    ilock(f->ip);
+    if(readi(f->ip, 1, va, offset, len) <= 0){
+        printf("load_vma\n");
+        return -1;
+    }
+    iunlock(f->ip);
+    //reset flags
+    pte_t *pte;
+    if((pte = walk(p->pagetable, va, 0)) == 0)
+        return -1;
+    if(*pte & PTE_V)
+        panic("remap");
+    int perm=0;
+    int pa= PTE2PA(*pte);
+    if(vma->vm_prot&PROT_READ){
+        perm|=PTE_R;
+    }
+    if(vma->vm_prot&PROT_WRITE){
+        perm|=PTE_W;
+    }
+    if(vma->vm_prot&PROT_EXEC){
+        perm|=PTE_X;
+    }
+    *pte = PA2PTE(pa) | perm | PTE_V | PTE_U;
+    return 0;
+};
+int copy_vma(struct proc* p,struct proc* np){
+    //copy
+    for (int i = 0; i < NVMA && p->vma[i].valid; ++i) {
+        np->vma[i]=p->vma[i];
+        np->vma[i].file=filedup(p->vma[i].file);
+    }
+    np->vma_bound=p->vma_bound;
+    return copy(p->pagetable,np->pagetable,p->vma_bound,TRAPFRAME);
+}
+void unmap_all_vma(struct proc* p){
+    struct virtual_memory_area* vma=p->vma;
+    for (int i = 0; i < NVMA; ++i) {
+        if(!vma[i].valid){
+            break;
+        }
+        unmap_vma(p,vma[i].vm_start,vma[i].vm_end,i);
+    }
+}
+int unmap_vma(struct proc* p,uint64 begin,uint64 end,int vma_index){
+    //copy
+    //write MAP_SHARED to file
+    struct virtual_memory_area* vma=&p->vma[vma_index];
+    if(vma_index==-1){
+        return -1;
+    }
+    if(vma->vm_start>begin||vma->vm_end<end||end<begin){
+        return -1;
+    }
+    if(vma->vm_start!=begin&&vma->vm_end!=end){
+        return -1;
+    }
+    uint32 offset=begin-vma->vm_start+vma->offset;
+    if(vma->vm_start==begin){
+        vma->vm_start=end;
+    } else{
+        vma->vm_end=begin;
+    }
+//    size_t len=end-begin;
+    struct file* f=vma->file;
+    uint64 va= PGROUNDDOWN(begin);
+    pte_t *pte;
+    uint32 writelen=0;
+    uint64 pagebound=0;
+    if(vma->vm_flag&MAP_SHARED){
+        for (int i = va; i < end; i+=writelen,offset+=writelen) {
+            pagebound= min(PGROUNDUP(va+1),end);
+            writelen= pagebound-i;
+            pte= walk(p->pagetable,i,0);
+            if(pte==0||!(*pte&PTE_V)){
+                continue;
+            }
+            begin_op();
+            ilock(f->ip);
+            if (writei(f->ip,1,i,offset,writelen)<0){
+                iunlock(f->ip);
+                end_op();
+                return -1;
+            }
+            iunlock(f->ip);
+            end_op();
+            if(i< PGROUNDDOWN(vma->vm_start)||i> PGROUNDUP(vma->vm_end)){
+                uvmunmap(p->pagetable, PGROUNDDOWN(i), 1, 1);
+            }
+        }
+    }
+    if(vma->vm_start==vma->vm_end){
+        uvmunmap(p->pagetable, PGROUNDDOWN(vma->vm_start), 1, 1);
+        fileclose(vma->file);
+        vma->valid=0;
+    }
+    int i=vma_index+1;
+    while ((i!=NVMA)&&vma[i].valid){
+        vma[i-1]=vma[i];
+        i++;
+    }
+    if(vma[0].valid){
+        p->vma_bound=vma[0].vm_start;
+    } else{
+        p->vma_bound=TRAPFRAME;
+    }
+    return 0;
+}
+void vma_swap(struct virtual_memory_area* v1,struct virtual_memory_area* v2){
+    if(v1==0||v2==0){
+        panic("null swap");
+    }
+    struct virtual_memory_area tmp;
+    tmp=*v1;
+    *v1=*v2;
+    *v2=tmp;
+}
+int in_Interval(uint64 target,struct virtual_memory_area* vma){
+    return target>=vma->vm_start||target<vma->vm_end;
+}
+int map_vma(struct proc* p,uint64 begin,uint64 end, int prot, int flags,
+             struct file* f, uint32 offset){
+    //add to p->vma[]
+    //set valid
+    struct virtual_memory_area* vma=p->vma;
+    int i;
+
+    for (i = 0; i < NVMA; ++i) {
+        if(!vma[i].valid){
+            break;
+        }
+    }
+    int j;
+    for (j = 0;  j< i; ++j) {
+        if(in_Interval(begin,&vma[j])|| in_Interval(end-1,&vma[j])){
+            return -1;
+        }
+    }
+    if(i==NVMA){
+        return -1;
+    }
+    if(begin>=end){
+        return -1;
+    }
+    vma[i].vm_start=begin;
+    vma[i].vm_end=end;
+    vma[i].vm_prot=prot;
+    vma[i].vm_flag=flags;
+    vma[i].file= filedup(f);
+    vma[i].offset=offset;
+    vma[i].valid=1;
+    while (i>0){
+        if(vma[i].vm_start>vma[i-1].vm_start){
+            vma_swap(&vma[i],&vma[i-1]);
+        } else{
+            break;
+        }
+        i--;
+    }
+    return 0;
+}
+int page_fault_handler(struct proc* p,uint64 va){
+#define lazy_valid(va) (va<p->sz)
+#define not_stack(va) va!=(p->ustack-PGSIZE)
+    int mmap_index= mmap_valid(p,va);
+    if((lazy_valid(va)|| mmap_index!=-1) && not_stack(va)){
+        if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
+            if(lazy_valid(va)){
+                proc_usermapping(p,va, va+PGSIZE);
+            } else{
+                if(load_vma(p,va,mmap_index)==-1){
+                    p->killed=1;
+                    return 1;
+                }
+            }
+            return 0;
+        } else{
+            p->killed=1;
+            return 1;
+        }
+    } else{
+        return -1;
+    }
 }

@@ -79,9 +79,17 @@ struct trapframe {
   /* 272 */ uint64 t5;
   /* 280 */ uint64 t6;
 };
-
+#define NVMA 16
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
-
+struct virtual_memory_area{
+    char   valid;
+    uint64 vm_start;
+    uint64 vm_end;
+    uint32 vm_prot;
+    uint32 vm_flag;
+    struct file * file;
+    uint32 offset;
+};
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -105,6 +113,8 @@ struct proc {
   struct trapframe *trapframe; // data page for trampoline.S
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
+  struct virtual_memory_area vma[NVMA];
+  uint64 vma_bound;
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   int init_tick;

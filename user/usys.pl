@@ -41,3 +41,4 @@ entry("sigreturn");
 entry("sigresume");
 entry("sigra");
 entry("symlink");
+entry("mmap");

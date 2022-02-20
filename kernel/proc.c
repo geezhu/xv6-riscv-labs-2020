@@ -141,7 +141,10 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-
+  p->vma_bound=TRAPFRAME;
+  for(int i=0;i<NVMA;i++){
+      p->vma->valid=0;
+  }
   return p;
 }
 
@@ -155,6 +158,7 @@ freeproc(struct proc *p)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
   if(p->pagetable){
+      unmap_all_vma(p);
       proc_freepagetable(p->pagetable, p->sz);
       proc_usermapping(p,p->sz,0);
   }
@@ -175,6 +179,7 @@ freeproc(struct proc *p)
   p->init_tick=0;
   p->periodic=0;
   p->ustack=0;
+  p->vma_bound=TRAPFRAME;
 }
 
 // Create a user page table for a given process,
@@ -269,6 +274,9 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
+  if(p->sz+n>p->vma_bound){
+      return -1;
+  }
   if(n > 0){
     sz=sz+n;
   } else if(n < 0){
@@ -295,7 +303,7 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0|| copy_vma(p,np)<0){
     freeproc(np);
     release(&np->lock);
     return -1;
