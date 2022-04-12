@@ -30,8 +30,11 @@ struct superblock {
 #define DOUBLE  INDIRECT+1
 #define NDOUBLE (BSIZE / sizeof(uint))*(BSIZE / sizeof(uint))
 #define N_FILEADDR DOUBLE+1
+#ifdef LAB_FS
 #define MAXFILE (NDIRECT + NINDIRECT + NDOUBLE)
-
+#else
+#define MAXFILE (NDIRECT + NINDIRECT)
+#endif
 // On-disk inode structure
 struct dinode {
   short type;           // File type

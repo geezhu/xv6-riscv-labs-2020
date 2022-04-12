@@ -393,7 +393,28 @@ uint64 sys_mmap(void){
     if(argaddr(0, &begin) < 0 || argint(1,&length) < 0|| argint(2,&prot) < 0 || argint(3,&flags) < 0|| argfd(4,&fd,&f) < 0|| argint(5,&offset) < 0){
         return -1;
     }
-    return map_vma(myproc(),begin,begin+length,prot,flags,f,offset);
+    struct proc* p=myproc();
+    //avoid 2 vma intersect
+    if(prot&PROT_READ){
+        if(!f->readable){
+            return -1;
+        }
+    }
+    if(prot&PROT_WRITE&&(flags&MAP_SHARED)){
+        if(!f->writable){
+            return -1;
+        }
+    }
+    if(prot&PROT_EXEC){
+        if(!f->readable){
+            return -1;
+        }
+    }
+    begin= PGROUNDDOWN(PGROUNDDOWN(p->vma_bound)-length);
+    if(map_vma(myproc(),begin,begin+length,prot,flags,f,offset)==-1){
+        return -1;
+    }
+    return begin;
 };
 uint64 sys_munmap(void){
     uint64 begin;
@@ -401,7 +422,8 @@ uint64 sys_munmap(void){
     if(argaddr(0, &begin) < 0 || argint(1, &length) < 0){
         return -1;
     }
-    return unmap_vma(myproc(),begin,begin+length, mmap_valid(myproc(),begin));
+    struct proc* p=myproc();
+    return unmap_vma(p,begin,begin+length, mmap_valid(p,begin));
 };
 uint64
 sys_mkdir(void)

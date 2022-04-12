@@ -79,17 +79,22 @@ usertrap(void)
 //      if(va==p->ustack){
 //          printf("[%d]ustack_pf\n",p->pid);
 //      }
-      if(va<p->sz && va!=(p->ustack-PGSIZE)){
-          if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
-              proc_usermapping(p,va, va+PGSIZE);
-          } else{
-//              printf("[%d]out of mem\n",p->pid);
-//              unexpected();
-              p->killed=1;
-          }
-      } else{
+      int ret= page_fault_handler(p,va);
+      if(ret==1){
+//          printf("kill proc %d\n",p->pid);
+      } else if(ret==-1){
           unexpected();
       }
+//      if(va<p->sz && va!=(p->ustack-PGSIZE)){
+//          if(uvmalloc(p->pagetable, va, va+PGSIZE)!=0){
+//              proc_usermapping(p,va, va+PGSIZE);
+//          } else{
+////              printf("[%d]out of mem\n",p->pid);
+//              p->killed=1;
+//          }
+//      } else{
+//          unexpected();
+//      }
   } else {
       unexpected();
   }

@@ -158,7 +158,6 @@ freeproc(struct proc *p)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
   if(p->pagetable){
-      unmap_all_vma(p);
       proc_freepagetable(p->pagetable, p->sz);
       proc_usermapping(p,p->sz,0);
   }
@@ -381,7 +380,7 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  unmap_all_vma(p);
   begin_op();
   iput(p->cwd);
   end_op();

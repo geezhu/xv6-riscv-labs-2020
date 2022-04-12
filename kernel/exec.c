@@ -118,6 +118,7 @@ exec(char *path, char **argv)
   proc_freepagetable(oldpagetable, oldsz);
   proc_usermapping(p,oldsz,0);
   proc_usermapping(p,0,p->sz);
+  unmap_all_vma(p);
 //  if(p->pid==1){
 //      vmprint(p->pagetable);
 //  }

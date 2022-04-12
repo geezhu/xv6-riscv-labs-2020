@@ -34,7 +34,7 @@ main()
 #ifdef LAB_NET
     pci_init();
     sockinit();
-#endif    
+#endif
     userinit();      // first user process
     __sync_synchronize();
     started = 1;
@@ -47,6 +47,5 @@ main()
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
   }
-
   scheduler();        
 }
